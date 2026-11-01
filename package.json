@@ -1,0 +1,26 @@
+{
+  "name": "@piyush97/agentgate",
+  "version": "0.1.0",
+  "description": "Block AI-agent PRs that weaken tests, edit guardrails, or escalate CI permissions",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "agentgate": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "action.yml"
+  ],
+  "engines": {
+    "node": ">=24.2"
+  },
+  "scripts": {
+    "test": "node --test 'tests/**/*.test.ts'",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "typescript": "^5.9.3"
+  }
+}
