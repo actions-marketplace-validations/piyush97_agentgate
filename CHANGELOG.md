@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 (unreleased)
+## 0.1.0 (2026-11-01)
 
 - Rules: `test-weakened`, `guardrail-edited`, `workflow-escalation`, `dependency-added`, `suppression-added`.
 - `agentgate check` CLI with Markdown and JSON output.
