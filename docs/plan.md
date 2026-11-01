@@ -14,8 +14,8 @@
 
 - Repo: `~/Projects/agentgate`, GitHub `piyush97/agentgate`. npm name `agentgate` is taken → publish as `@piyush97/agentgate`, bin `agentgate`.
 - `"engines": { "node": ">=24.2" }` (needed for `import.meta.main`); Action `runs.using: node24`, `runs.main: dist/action.js`.
-- Zero runtime `dependencies`. Only devDependency: `typescript` (needs `erasableSyntaxOnly`, so >=5.8).
-- Source imports use `.ts` extensions; `tsconfig.json` sets `rewriteRelativeImportExtensions`, `erasableSyntaxOnly`, `verbatimModuleSyntax`, `strict`, `module: nodenext`, `target: es2024`, `rootDir: src`, `outDir: dist`. No enums, namespaces, or parameter properties.
+- Zero runtime `dependencies`. devDependencies: `typescript` (>=5.8 for `erasableSyntaxOnly`) and `@types/node@^24` (types for `node:*`, `process`, `import.meta.main`; typecheck fails without it).
+- Source imports use `.ts` extensions; `tsconfig.json` sets `types: ["node"]`, `rewriteRelativeImportExtensions`, `erasableSyntaxOnly`, `verbatimModuleSyntax`, `strict`, `module: nodenext`, `target: es2024`, `rootDir: src`, `outDir: dist`. No enums, namespaces, or parameter properties.
 - Tests: `node --test 'tests/**/*.test.ts'` with `node:assert/strict`.
 - Exit codes everywhere: `0` pass or warn, `1` block, `2` usage/environment error.
 - Config file: `.agentgate.json`. The Action reads it from the PR **base** commit, never the head.
@@ -31,7 +31,8 @@
 2. **Agent or PR author adds the override label itself** → override ignored, summary says why. Tested in Task 9.
 3. **Shallow checkout (`fetch-depth: 1`) so base SHA is missing** → exit 2 with "fetch-depth: 0" in the message, never a silent pass. Tested in Task 2 and Task 8.
 4. **Test file deleted, or renamed out of a test path** → block, even with no `.skip` added. Tested in Task 4.
-5. **Paths with spaces/unicode, binary files, `\ No newline at end of file`** → parsed correctly, no crash, binary files skipped by line rules. Tested in Task 1 and Task 2.
+5. **Human applies the override label, then the agent pushes more commits** → the stale label must not approve unreviewed code. On a `synchronize` event the override is ignored until a human removes and re-applies the label. Tested in Task 9.
+6. **Agent edits the workflow that runs agentgate** (deletes the job, or swaps it for `run: exit 0` under the same job name). agentgate can't stop this: on `pull_request` the workflow file comes from the PR head. The defense is branch protection (required check plus required Code Owner review on `.github/**`), and for orgs a ruleset-required workflow. The README must say this (Task 10).
 
 ---
 
@@ -106,7 +107,7 @@ agentgate/
 mkdir -p ~/Projects/agentgate/docs && cd ~/Projects/agentgate
 cp ~/Projects/PiyushMehta.com/docs/plans/agentgate.md docs/plan.md
 but setup --init
-npm init -y && npm i -D typescript
+npm init -y && npm i -D typescript @types/node@^24
 ```
 Set `package.json`: `"name": "@piyush97/agentgate"`, `"type": "module"`, `"bin": { "agentgate": "dist/cli.js" }`, `"files": ["dist", "action.yml"]`, `"engines": { "node": ">=24.2" }`, scripts `"test": "node --test 'tests/**/*.test.ts'"`, `"build": "tsc"`, `"typecheck": "tsc --noEmit"`. Write `tsconfig.json` per Global Constraints (`include: ["src"]`).
 
@@ -247,7 +248,7 @@ test('show() returns content at ref and null when absent', () => {
   ```ts
   export const DEFAULT_CONFIG: Config;
   export function parseConfig(json: string, source: string): Config;   // merged over defaults; GateError on invalid
-  export function loadConfig(git: Git, baseSha: string, path?: string): Config; // default '.agentgate.json', read at base; defaults when absent
+  export function loadConfig(git: Git, baseSha: string, path?: string): Config; // default '.agentgate.json', read at base; defaults when absent; passes source `${path}@${baseSha.slice(0, 7)}` to parseConfig
   ```
 
 Defaults (exact):
@@ -417,8 +418,8 @@ test('workflow rule ignores non-workflow files and removed lines', () => {
 - Produces: `export const dependencyAdded: Rule`, `export const suppressionAdded: Rule`
 
 `dependency-added`:
-- `**/package.json` (skip deleted): parse base and head via `ctx.readFile` (base `null` → `{}`). For `dependencies`, `devDependencies`, `optionalDependencies`, `peerDependencies`: names in head but not base → `"New dependency: <name>@<range> (<field>)"`. Scripts `preinstall`, `install`, `postinstall`, `prepare` added or changed → `"Install lifecycle script changed: <name>"`. Unparseable head → single `"package.json is not valid JSON"`; never throw.
-- `**/requirements*.txt`: added lines; strip `#` comments and whitespace; skip blanks and lines starting `-`. Name = text before the first of `=<>~![; `, lowercased. Names absent from removed lines → `"New dependency: <stripped line>"` at that line.
+- `**/package.json` (skip deleted): parse base (at `oldPath ?? path`) and head via `ctx.readFile` (base `null` → `{}`). For `dependencies`, `devDependencies`, `optionalDependencies`, `peerDependencies`: names in head but not base → `"New dependency: <name>@<range> (<field>)"`. Scripts `preinstall`, `install`, `postinstall`, `prepare` added or changed → `"Install lifecycle script changed: <name>"`. Unparseable head → single `"package.json is not valid JSON"`; never throw.
+- `**/requirements*.txt`: added lines; strip `#` comments and whitespace; skip blanks and lines starting `-`. Name = text before the first of `=<>~![; `, lowercased. Removed lines go through the same parsing. Any added name not among the removed names → `"New dependency: <stripped line>"` at that line.
 
 `suppression-added`: any non-binary file, added lines matching
 ```ts
@@ -528,7 +529,7 @@ test('markdown escapes pipes and shows note', () => {
   export function main(argv: string[], io: { cwd: string; out(s: string): void; err(s: string): void }): number;
   ```
 
-Usage: `agentgate check --base <ref> [--head <ref>=HEAD] [--config <path at base>=.agentgate.json] [--format md|json]=md`. Parse with `node:util` `parseArgs` (`strict: true`). `--help` → usage, 0. Missing `--base`, unknown flag, bad `--format`, or `GateError` → message on `err`, 2. Other errors rethrow. Verdict `block` → 1, else 0. File starts `#!/usr/bin/env node`; entry guard `if (import.meta.main) process.exitCode = main(process.argv.slice(2), { cwd: process.cwd(), out: console.log, err: console.error })`.
+Usage: `agentgate check --base <ref> [--head <ref>=HEAD] [--config <path at base>=.agentgate.json] [--format md|json]=md`. Parse with `node:util` `parseArgs` (`strict: true`, `allowPositionals: true`). `--help` (with or without `check`) → usage, 0. First positional not `check`, missing `--base`, unknown flag, bad `--format`, or `GateError` → message on `err`, 2. Other errors rethrow. Verdict `block` → 1, else 0. File starts `#!/usr/bin/env node`; entry guard `if (import.meta.main) process.exitCode = main(process.argv.slice(2), { cwd: process.cwd(), out: console.log, err: console.error })`.
 
 - [ ] **Step 1: Write failing tests** (temp repos via `makeRepo`; `io` captures into strings)
 
@@ -572,7 +573,7 @@ test('missing --base or unknown base SHA → 2 on stderr', () => {
 `run` flow:
 1. Read `GITHUB_EVENT_PATH`. No `pull_request` key → print `::error::agentgate runs on pull_request events`, return 2.
 2. `collect(GITHUB_WORKSPACE, pr.base.sha, pr.head.sha, env['INPUT_CONFIG-PATH'])` → `runGate`.
-3. Verdict `block` and PR labels include `config.overrideLabel` → GET `${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/issues/${pr.number}/events?per_page=100` with `Authorization: Bearer ${INPUT_GITHUB-TOKEN}`, follow `Link: rel="next"`, then `overrideBy(events, label, pr.user.login)`. Accepted → `downgrade`, note `Override by @<login> via label <label>`. Rejected → note `Override label ignored: <reason>`. HTTP failure → keep block, note `Override check failed: HTTP <status>`.
+3. Verdict `block`, PR labels include `config.overrideLabel`, and `event.action === 'synchronize'` → keep block, note `Override label ignored: new commits pushed after approval; remove and re-apply the label`, and skip the API call. Otherwise, when the verdict is `block` and the label is present → GET `${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/issues/${pr.number}/events?per_page=100` with `Authorization: Bearer ${INPUT_GITHUB-TOKEN}`, follow `Link: rel="next"`, then `overrideBy(events, label, pr.user.login)`. Accepted → `downgrade`, note `Override by @<login> via label <label>`. Rejected → note `Override label ignored: <reason>`. HTTP failure → keep block, note `Override check failed: HTTP <status>`.
 4. Append `toMarkdown` to `GITHUB_STEP_SUMMARY`; print `toAnnotations`; append `verdict=<v>\n` to `GITHUB_OUTPUT`.
 5. `GateError` → `::error::<msg>`, 2. Otherwise `block` → 1, else 0.
 
@@ -602,6 +603,10 @@ test('run(): self-applied label keeps block and says why', async () => {
   // PR labels include agentgate-approved; fetchFn returns [ev(prAuthor, 'User')]
   assert.equal(code, 1); assert.match(summaryText, /Override label ignored: applied by the PR author/);
 });
+test('run(): label present on synchronize → block, no API call', async () => {
+  // event.action 'synchronize', labels include agentgate-approved; fetchFn throws if called
+  assert.equal(code, 1); assert.match(summaryText, /new commits pushed after approval/);
+});
 ```
 
 - [ ] **Step 2: Run, expect FAIL.** · **Step 3: Implement** (entry guard: `if (import.meta.main) run(process.env, fetch).then((c) => { process.exitCode = c; })`).
@@ -617,10 +622,10 @@ test('run(): self-applied label keeps block and says why', async () => {
 - Create: `.github/workflows/ci.yml`, `.github/workflows/agentgate.yml`, `.github/CODEOWNERS` (`* @piyush97`), `.agentgate.json` (`{}`), `examples/agent-pr-gate.yml`, `README.md`, `LICENSE` (MIT)
 
 - [ ] **Step 1: CI** — `ci.yml` on `push` and `pull_request`: Node 24, `npm ci`, `npm run typecheck`, `npm test`, `npm run build`, `git diff --exit-code dist/` (fails on stale `dist/`). Actions pinned to full SHAs.
-- [ ] **Step 2: Self-gate** — `agentgate.yml` on `pull_request: { types: [opened, synchronize, reopened, labeled, unlabeled] }`, `permissions: { contents: read, pull-requests: read }`, checkout with `fetch-depth: 0`, `uses: ./`.
-- [ ] **Step 3: Example** — `examples/agent-pr-gate.yml`: the post's `sast` and `secrets` jobs unchanged; `test-integrity` job replaced by checkout (`fetch-depth: 0`) + `uses: piyush97/agentgate@v0`.
-- [ ] **Step 4: README** — what it blocks (five rules, one line each, default severity); 10-line quick start; `.agentgate.json` reference with defaults and the append-only `protectedPaths` rule; override label rules; "What it does not catch" (authz, IDOR, tenant isolation, business logic, per the post); link to the post.
-- [ ] **Step 5: Verify** — `npm test && npm run build && git diff --exit-code dist/` pass; `node dist/cli.js check --base <first commit SHA>` reports `guardrail-edited` for `.github/**` and `.agentgate.json`.
+- [ ] **Step 2: Self-gate** — `agentgate.yml` on `pull_request: { types: [opened, synchronize, reopened, labeled, unlabeled] }`, `permissions: { contents: read, pull-requests: read }`, checkout with `fetch-depth: 0`, `uses: ./`. Caveat: `./` runs the PR's own `dist/`, so a PR can change the gate it is tested by. That's acceptable before release; CODEOWNERS `* @piyush97` covers it. After v0.1, switch to the released full SHA.
+- [ ] **Step 3: Example** — `examples/agent-pr-gate.yml`: the post's `sast` and `secrets` jobs unchanged; `test-integrity` job replaced by checkout (`fetch-depth: 0`) + `uses: piyush97/agentgate@<FULL_SHA> # v0.1.0`. Pin every action to a full SHA: a mutable `@v0` would fail agentgate's own `workflow-escalation` pin check. Leave a clearly labeled `<FULL_SHA>` placeholder until the release exists.
+- [ ] **Step 4: README** — what it blocks (five rules, one line each, default severity); 10-line quick start; `.agentgate.json` reference with defaults and the append-only `protectedPaths` rule; override label rules (human-only, not the author, re-apply after new pushes); "Required setup" (mark `agentgate` as a required status check, add `.github/** @owner` to CODEOWNERS, enable "Require review from Code Owners"; for orgs, run it as a ruleset-required workflow so a PR can't edit it away); "What it does not catch" (authz, IDOR, tenant isolation, business logic, per the post); link to the post.
+- [ ] **Step 5: Verify** — `npm test && npm run build && git diff --exit-code dist/` pass; `node dist/cli.js check --base <first commit SHA>` exits **1** (expected) and reports `guardrail-edited` for `.github/**` and `.agentgate.json`.
 - [ ] **Step 6: Commit** — `but commit -m "Dogfood agentgate in CI and document usage"`
 - [ ] **Step 7: Stop and ask Piyush** before: creating the GitHub repo, pushing, tagging `v0.1.0` + `v0`, `npm publish --access public --provenance`, Marketplace listing.
 

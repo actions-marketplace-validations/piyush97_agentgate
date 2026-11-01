@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     container: semgrep/semgrep
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
       - name: Semgrep (new findings only)
@@ -28,7 +28,7 @@ jobs:
   secrets:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
       - name: gitleaks (PR commits only)
@@ -42,9 +42,14 @@ jobs:
             --redact --exit-code 1
 
   test-integrity:
+    name: agentgate
+    permissions:
+      contents: read
+      pull-requests: read
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
-      - uses: piyush97/agentgate@v0
+      # Replace <FULL_SHA> with the released v0.1.0 commit SHA.
+      - uses: piyush97/agentgate@<FULL_SHA> # v0.1.0 (release pending)

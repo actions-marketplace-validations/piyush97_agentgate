@@ -8,38 +8,41 @@ Semgrep and gitleaks catch insecure code. They do not catch a PR that deletes th
 
 | Rule | Blocks when | Default |
 | --- | --- | --- |
-| `test-weakened` | a test file is deleted or moved out of test paths, a test is skipped or focused, or the PR removes more assertions than it adds | block |
+| `test-weakened` | a test file is deleted, moved out of test paths, or changed as binary, a test is skipped or focused, or the PR removes more assertions than it adds | block |
 | `guardrail-edited` | the PR touches `.github/**`, `CODEOWNERS`, `AGENTS.md`, `.agentgate.json`, scanner configs, or paths you add | block |
 | `workflow-escalation` | a workflow gains `pull_request_target`, `write-all`, a `write` permission, a secret, untrusted `github.event` interpolation, or an action not pinned to a full commit SHA | block |
 | `dependency-added` | `package.json` or `requirements*.txt` gains a dependency, or an install lifecycle script changes | warn |
 | `suppression-added` | a changed line silences a scanner or the type checker (`nosemgrep`, `eslint-disable`, `@ts-ignore`, `noqa`, `NOSONAR`, ...) | warn |
 
-Two rules already have coverage elsewhere: a changed test still has to pass CI, so a weakened test usually only shows up when the assertion it replaced disappears; that is what `test-weakened` measures.
-
 ## Quick start
+
+Release pending. Replace `<FULL_SHA>` below with the published v0.1.0 commit SHA before installing.
 
 ```yaml
 # .github/workflows/agentgate.yml
-on: pull_request
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
 permissions:
   contents: read
   pull-requests: read
 jobs:
   gate:
+    name: agentgate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
-      - uses: piyush97/agentgate@v0
+      - uses: piyush97/agentgate@<FULL_SHA> # v0.1.0 (release pending)
 ```
 
 `fetch-depth: 0` is required: the Action resolves the PR base commit to read config and file contents from it.
 
-Locally, against the last three commits:
+From this checkout, against the last three commits:
 
 ```bash
-npx @piyush97/agentgate check --base HEAD~3
+node dist/cli.js check --base HEAD~3
 ```
 
 ## Config
@@ -72,11 +75,20 @@ A reviewer who has read the change can apply the `agentgate-approved` label. The
 
 The label only counts when:
 
+- this run was triggered by applying the approval label (`labeled`),
 - the latest `labeled` or `unlabeled` event for it is a `labeled` event,
 - the actor is a user account, not a bot,
 - the actor is not the PR author.
 
+Remove and re-apply the label after new commits, reopening the PR, or another label event. Existing labels never approve these runs. API errors or incomplete event history also keep the block.
+
 Anything else keeps the block and says why in the summary. The Action has `contents: read` and `pull-requests: read`; it never writes to the PR.
+
+## Required setup
+
+Make the `agentgate` job a required status check in branch protection. Add `.github/** @your-owner` to CODEOWNERS and enable **Require review from Code Owners**. A PR can otherwise replace or remove the workflow that runs the gate. For organizations with ruleset-required workflows, run the gate from that trusted workflow.
+
+The pre-release self-gate uses `./`, which runs the PR's own `dist/`. CODEOWNERS review is essential. After v0.1.0, pin the self-gate to the released full commit SHA. Pin consumers to a full SHA too: mutable version tags fail `workflow-escalation`.
 
 ## Exit codes
 
