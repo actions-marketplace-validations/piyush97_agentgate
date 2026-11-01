@@ -1,4 +1,4 @@
-import { ALL_RULES } from "./rules/index.js";
+import { ALL_RULES } from './rules/index.js';
 export function runGate(files, ctx) {
     const findings = [];
     for (const rule of ALL_RULES) {

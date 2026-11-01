@@ -1,8 +1,8 @@
 import { appendFileSync, readFileSync } from 'node:fs';
-import { collect } from "./collect.js";
-import { downgrade, runGate, verdictOf } from "./engine.js";
-import { toAnnotations, toMarkdown } from "./report.js";
-import { GateError } from "./types.js";
+import { collect } from './collect.js';
+import { downgrade, runGate, verdictOf } from './engine.js';
+import { toAnnotations, toMarkdown } from './report.js';
+import { GateError } from './types.js';
 export function overrideBy(events, label, prAuthor) {
     let latest;
     for (const event of events) {

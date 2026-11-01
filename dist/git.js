@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
-import { parseHunks } from "./diff.js";
-import { GateError } from "./types.js";
+import { parseHunks } from './diff.js';
+import { GateError } from './types.js';
 export function createGit(cwd) {
     const run = (args) => {
         try {

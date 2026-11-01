@@ -1,5 +1,5 @@
-import { loadConfig } from "./config.js";
-import { createGit } from "./git.js";
+import { loadConfig } from './config.js';
+import { createGit } from './git.js';
 export function collect(cwd, base, head, configPath) {
     const git = createGit(cwd);
     const baseSha = git.resolve(base);

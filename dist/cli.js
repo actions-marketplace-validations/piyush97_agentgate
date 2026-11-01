@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util';
-import { collect } from "./collect.js";
-import { runGate, verdictOf } from "./engine.js";
-import { toJson, toMarkdown } from "./report.js";
-import { GateError } from "./types.js";
+import { collect } from './collect.js';
+import { runGate, verdictOf } from './engine.js';
+import { toJson, toMarkdown } from './report.js';
+import { GateError } from './types.js';
 const USAGE = 'Usage: agentgate check --base <ref> [--head <ref>] [--config <path>] [--format md|json]';
 export function main(argv, io) {
     let values;

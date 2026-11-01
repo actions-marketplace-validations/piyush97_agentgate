@@ -1,4 +1,4 @@
-import { GateError } from "./types.js";
+import { GateError } from './types.js';
 export const DEFAULT_CONFIG = {
     testGlobs: [
         '**/*.test.*',
