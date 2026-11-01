@@ -4,6 +4,20 @@ Block AI-agent PRs that weaken tests, edit guardrails, or escalate CI permission
 
 Semgrep and gitleaks catch insecure code. They do not catch a PR that deletes the failing test, loosens the workflow permissions, or silences the scanner. agentgate checks that layer: it reads the PR diff, applies five rules, and fails the check when the change needs a human.
 
+## How it works
+
+```mermaid
+flowchart LR
+  PR[PR diff<br/>base...head] --> R[5 rules]
+  CFG[.agentgate.json<br/>from base commit] --> R
+  R --> V{verdict}
+  V -->|pass / warn| OK[exit 0]
+  V -->|block| B[exit 1]
+  L[human approval label] -.->|block to warn| V
+```
+
+Details, trust boundaries and the override flow: [docs/architecture.md](docs/architecture.md).
+
 ## Rules
 
 | Rule | Blocks when | Default |
@@ -114,5 +128,7 @@ npm test
 npm run typecheck
 npm run build   # dist/ is committed for the Action; CI fails on stale dist/
 ```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Report bypasses privately per [SECURITY.md](SECURITY.md).
 
 MIT licensed.
