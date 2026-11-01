@@ -8,7 +8,7 @@ const PATTERNS: Array<[RegExp, string]> = [
   [/^\s*(?:contents|id-token|actions|packages|pull-requests|issues|deployments|security-events|statuses|checks|attestations):\s*write\b/, 'write permission granted'],
   [/\$\{\{\s*secrets\./, 'secret referenced'],
   [/\$\{\{\s*github\.(?:head_ref|event\.[\w.]*\.(?:title|body|ref|label|name|email|message))\b/, 'untrusted input interpolated into workflow'],
-  [/^\s*-?\s*uses:\s*(?!\.\/|docker:\/\/)[^\s#]+@(?![0-9a-f]{40}\b)\S+/, 'action not pinned to a full commit SHA'],
+  [/^\s*-?\s*uses:\s*(?!\.\/|docker:\/\/)[^@\s#]+@(?![0-9a-f]{40}(?:\s|$))\S+/, 'action not pinned to a full commit SHA'],
 ];
 
 export const workflowEscalation: Rule = {

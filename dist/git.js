@@ -2,7 +2,15 @@ import { execFileSync } from 'node:child_process';
 import { parseHunks } from "./diff.js";
 import { GateError } from "./types.js";
 export function createGit(cwd) {
-    const run = (args) => execFileSync('git', args, { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] });
+    const run = (args) => {
+        try {
+            return execFileSync('git', ['--literal-pathspecs', ...args], { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] });
+        }
+        catch {
+            throw new GateError('Cannot read repository history. Use actions/checkout with fetch-depth: 0.');
+        }
+    };
+    cwd = run(['rev-parse', '--show-toplevel']).trim();
     return {
         resolve(ref) {
             try {
@@ -33,7 +41,7 @@ export function createGit(cwd) {
             }
             for (const f of files) {
                 const spec = f.oldPath ? [f.oldPath, f.path] : [f.path];
-                const patch = run(['diff', '--no-color', '--no-ext-diff', '--unified=0', '-M', range, '--', ...spec]);
+                const patch = run(['diff', '--no-color', '--no-ext-diff', '--no-textconv', '--unified=0', '-M', range, '--', ...spec]);
                 const parsed = parseHunks(patch);
                 f.binary = parsed.binary;
                 f.added = parsed.added;
@@ -42,12 +50,9 @@ export function createGit(cwd) {
             return files;
         },
         show(ref, path) {
-            try {
-                return run(['show', `${ref}:${path}`]);
-            }
-            catch {
+            if (run(['ls-tree', '-z', ref, '--', path]) === '')
                 return null;
-            }
+            return run(['show', `${ref}:${path}`]);
         },
     };
 }

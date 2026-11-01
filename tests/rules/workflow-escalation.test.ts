@@ -19,3 +19,12 @@ test('workflow rule ignores non-workflow files and removed lines', () => {
   assert.deepEqual(workflowEscalation.check([fd('docs/ci.md', { added: ['contents: write'] }),
     fd('.github/workflows/ci.yml', { removed: ['contents: write'] })], ctx), []);
 });
+
+test('a SHA prefix followed by a branch suffix is not an immutable pin', () => {
+  const ctx = { config: DEFAULT_CONFIG, readFile: () => null };
+  const out = workflowEscalation.check([fd('.github/workflows/ci.yml', { added: [
+    [1, '  - uses: owner/action@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-branch'],
+    [2, '  - uses: owner/action@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa # pinned'],
+  ] })], ctx);
+  assert.deepEqual(out.map(f => f.line), [1]);
+});

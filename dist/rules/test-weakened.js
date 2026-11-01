@@ -1,5 +1,5 @@
 import { matchesGlob } from 'node:path';
-const SKIP = /\b(?:it|test|describe)\.(?:skip|only|todo)\s*\(|^\b(?:xit|xtest|xdescribe)\s*\(|@pytest\.mark\.(?:skip|xfail)|@unittest\.skip|\bt\.Skip(?:Now|f)?\s*\(|@Disabled\b|@Ignore\b/;
+const SKIP = /\b(?:it|test|describe)\.(?:skip|only|todo)\s*\(|\b(?:xit|xtest|xdescribe)\s*\(|@pytest\.mark\.(?:skip|xfail)|@unittest\.skip|\bt\.Skip(?:Now|f)?\s*\(|@Disabled\b|@Ignore\b/;
 const ASSERT = /\b(?:expect|assert\w*)\s*[.(]|\bself\.assert\w+\s*\(|\bt\.(?:Error|Errorf|Fatal|Fatalf|Fail|FailNow)\s*\(|\brequire\.\w+\s*\(/;
 export function isTestPath(path, globs) {
     return globs.some((glob) => matchesGlob(path, glob));
@@ -12,6 +12,9 @@ export const testWeakened = {
         for (const f of files) {
             if (f.status === 'deleted' && isTest(f.path)) {
                 findings.push({ rule: 'test-weakened', file: f.path, message: 'Test file deleted' });
+            }
+            else if (f.binary && isTest(f.path)) {
+                findings.push({ rule: 'test-weakened', file: f.path, message: 'Binary test file changed: needs human review' });
             }
         }
         for (const f of files) {

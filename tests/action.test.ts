@@ -66,7 +66,7 @@ test('run(): blocking PR writes summary, annotations, verdict output', async () 
 test('run(): self-applied label keeps block and says why', async () => {
   const r = makeRepo(); r.write('a', 'a\n'); const base = r.commit('b');
   r.write('tests/a.test.ts', 'it.skip("y", () => {});\n'); const head = r.commit('h');
-  const { env: e, summary, output } = env(r.dir, prEvent(base, head, [L], 'dev'));
+  const { env: e, summary, output } = env(r.dir, { ...prEvent(base, head, [L], 'dev'), action: 'labeled', label: { name: L } });
   const fetchFn = (async () => new Response(JSON.stringify([ev('dev', 'User')]), { status: 200 })) as unknown as typeof fetch;
   const code = await run(e, fetchFn);
   assert.equal(code, 1);
@@ -77,10 +77,62 @@ test('run(): self-applied label keeps block and says why', async () => {
 test('run(): human override downgrades to warn', async () => {
   const r = makeRepo(); r.write('a', 'a\n'); const base = r.commit('b');
   r.write('tests/a.test.ts', 'it.skip("y", () => {});\n'); const head = r.commit('h');
-  const { env: e, summary, output } = env(r.dir, prEvent(base, head, [L], 'bot[bot]'));
+  const { env: e, summary, output } = env(r.dir, { ...prEvent(base, head, [L], 'bot[bot]'), action: 'labeled', label: { name: L } });
   const fetchFn = (async () => new Response(JSON.stringify([ev('piyush97', 'User')]), { status: 200 })) as unknown as typeof fetch;
   const code = await run(e, fetchFn);
   assert.equal(code, 0);
   assert.match(readFileSync(summary, 'utf8'), /Override by @piyush97 via label agentgate-approved/);
   assert.match(readFileSync(output, 'utf8'), /verdict=warn/);
 });
+
+for (const action of ['synchronize', 'opened', 'reopened', 'unlabeled', 'labeled']) {
+  test(`run(): existing approval cannot bypass a ${action} event`, async () => {
+    const r = makeRepo(); r.write('a', 'a\n'); const base = r.commit('b');
+    r.write('tests/a.test.ts', 'it.skip("y", () => {});\n'); const head = r.commit('h');
+    const event = { ...prEvent(base, head, [L]), action, label: { name: 'unrelated-label' } };
+    const { env: e, summary, output } = env(r.dir, event);
+    let calls = 0;
+    const fetchFn = (async () => { calls++; return Response.json([ev('lead', 'User')]); }) as typeof fetch;
+    assert.equal(await run(e, fetchFn), 1);
+    assert.match(readFileSync(summary, 'utf8'), /Override label ignored:/);
+    assert.match(readFileSync(output, 'utf8'), /verdict=block/);
+    assert.equal(calls, 0);
+  });
+}
+
+for (const failure of ['HTTP', 'network', 'invalid JSON', 'invalid events', 'off-host pagination', 'pagination limit']) {
+  test(`run(): ${failure} cannot approve a blocking PR`, async () => {
+    const r = makeRepo(); r.write('a', 'a\n'); const base = r.commit('b');
+    r.write('tests/a.test.ts', 'it.skip("y", () => {});\n'); const head = r.commit('h');
+    const { env: e, summary, output } = env(r.dir, { ...prEvent(base, head, [L]), action: 'labeled', label: { name: L } });
+    let calls = 0;
+    const fetchFn = (async () => {
+      calls++;
+      if (failure === 'HTTP') return new Response('', { status: 503 });
+      if (failure === 'network') throw new Error('network unavailable');
+      if (failure === 'invalid JSON') return new Response('{');
+      if (failure === 'invalid events') return Response.json({ message: 'unexpected payload' });
+      const next = failure === 'off-host pagination' ? 'https://untrusted.example/events' : `${e.GITHUB_API_URL}/repos/o/r/issues/1/events?page=${calls + 1}`;
+      return Response.json([ev('lead', 'User')], { headers: { link: `<${next}>; rel="next"` } });
+    }) as typeof fetch;
+    assert.equal(await run(e, fetchFn), 1);
+    assert.match(readFileSync(summary, 'utf8'), /Override check failed:/);
+    assert.match(readFileSync(output, 'utf8'), /verdict=block/);
+    assert.equal(calls, failure === 'pagination limit' ? 10 : 1);
+  });
+}
+
+test('override rejects incomplete actor data', () => {
+  assert.equal(overrideBy([{ event: 'labeled', label: { name: L }, actor: { type: 'User' } } as LabelEvent], L, 'dev').accepted, false);
+});
+
+for (const failure of ['missing event', 'invalid event JSON', 'GITHUB_STEP_SUMMARY', 'GITHUB_OUTPUT']) {
+  test(`run(): ${failure} is an environment error with exit 2`, async () => {
+    const r = makeRepo(); r.write('a', 'a\n'); const base = r.commit('b');
+    const { env: e, summary } = env(r.dir, prEvent(base, base));
+    if (failure === 'missing event') e.GITHUB_EVENT_PATH += '.missing';
+    else if (failure === 'invalid event JSON') writeFileSync(e.GITHUB_EVENT_PATH!, '{');
+    else e[failure] = join(summary, 'not-a-directory');
+    assert.equal(await run(e, () => { throw new Error('fetch must not be called'); }), 2);
+  });
+}

@@ -14,7 +14,7 @@ test('renamed out of test paths', () => {
 });
 test('.skip/.only/xit/pytest skip flagged with line numbers', () => {
   const out = testWeakened.check([
-    fd('tests/x.test.ts', { added: [[7, 'it.skip("a", () => {})'], [9, 'describe.only("b", f)'], [11, 'xit("c")']] }),
+    fd('tests/x.test.ts', { added: [[7, 'it.skip("a", () => {})'], [9, 'describe.only("b", f)'], [11, '  xit("c")']] }),
     fd('tests/test_y.py', { added: [[3, '@pytest.mark.skip(reason="flaky")']] })], ctx);
   assert.deepEqual(out.map((f) => f.line), [7, 9, 11, 3]);
 });
@@ -26,4 +26,10 @@ test('net assertion loss flagged once; moved assertions are not', () => {
 });
 test('skip strings outside test paths are ignored', () => {
   assert.deepEqual(testWeakened.check([fd('docs/testing.md', { added: ['use it.skip( sparingly'] })], ctx), []);
+});
+
+test('binary changes to test paths require review even without parsed lines', () => {
+  const findings = testWeakened.check([fd('tests/a.test.ts', { binary: true })], ctx);
+  assert.equal(findings.length, 1);
+  assert.match(findings[0]!.message, /Binary test file changed/);
 });

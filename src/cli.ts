@@ -37,7 +37,7 @@ export function main(argv: string[], io: { cwd: string; out(s: string): void; er
     return 0;
   }
 
-  if (positionals[0] !== 'check') {
+  if (positionals.length !== 1 || positionals[0] !== 'check') {
     io.err('agentgate: expected the "check" command');
     io.err(USAGE);
     return 2;

@@ -20,12 +20,12 @@ function packageJson(f, ctx) {
     const head = parseJson(headText);
     if (head === null)
         return [{ rule: 'dependency-added', file: f.path, message: 'package.json is not valid JSON' }];
-    const base = parseJson(ctx.readFile('base', f.path)) ?? {};
+    const base = parseJson(ctx.readFile('base', f.oldPath ?? f.path)) ?? {};
     const findings = [];
     for (const field of DEP_FIELDS) {
         const before = asObject(base[field]);
         for (const [name, range] of Object.entries(asObject(head[field]))) {
-            if (!(name in before)) {
+            if (!Object.hasOwn(before, name)) {
                 findings.push({ rule: 'dependency-added', file: f.path, message: `New dependency: ${name}@${String(range)} (${field})` });
             }
         }
@@ -57,12 +57,16 @@ export const dependencyAdded = {
     check(files, ctx) {
         const findings = [];
         for (const f of files) {
-            if (f.status === 'deleted' || f.binary)
+            if (f.status === 'deleted')
                 continue;
             if (matchesGlob(f.path, '**/package.json'))
                 findings.push(...packageJson(f, ctx));
-            if (matchesGlob(f.path, '**/requirements*.txt'))
-                findings.push(...requirements(f));
+            if (matchesGlob(f.path, '**/requirements*.txt')) {
+                if (f.binary)
+                    findings.push({ rule: 'dependency-added', file: f.path, message: 'Dependency file changed as binary: needs human review' });
+                else
+                    findings.push(...requirements(f));
+            }
         }
         return findings;
     },

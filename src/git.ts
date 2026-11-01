@@ -10,8 +10,15 @@ export interface Git {
 }
 
 export function createGit(cwd: string): Git {
-  const run = (args: string[]): string =>
-    execFileSync('git', args, { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] });
+  const run = (args: string[]): string => {
+    try {
+      return execFileSync('git', ['--literal-pathspecs', ...args], { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] });
+    } catch {
+      throw new GateError('Cannot read repository history. Use actions/checkout with fetch-depth: 0.');
+    }
+  };
+
+  cwd = run(['rev-parse', '--show-toplevel']).trim();
 
   return {
     resolve(ref) {
@@ -44,7 +51,7 @@ export function createGit(cwd: string): Git {
 
       for (const f of files) {
         const spec = f.oldPath ? [f.oldPath, f.path] : [f.path];
-        const patch = run(['diff', '--no-color', '--no-ext-diff', '--unified=0', '-M', range, '--', ...spec]);
+        const patch = run(['diff', '--no-color', '--no-ext-diff', '--no-textconv', '--unified=0', '-M', range, '--', ...spec]);
         const parsed = parseHunks(patch);
         f.binary = parsed.binary;
         f.added = parsed.added;
@@ -55,11 +62,8 @@ export function createGit(cwd: string): Git {
     },
 
     show(ref, path) {
-      try {
-        return run(['show', `${ref}:${path}`]);
-      } catch {
-        return null;
-      }
+      if (run(['ls-tree', '-z', ref, '--', path]) === '') return null;
+      return run(['show', `${ref}:${path}`]);
     },
   };
 }

@@ -39,3 +39,23 @@ test('show() returns content at ref and null when absent', () => {
   assert.equal(g.show(base, '.agentgate.json'), '{"a":1}');
   assert.equal(g.show(base, 'nope.json'), null);
 });
+
+test('diff paths are literal even when filenames contain glob syntax', () => {
+  const r = makeRepo(); r.write('a', 'a\n'); const base = r.commit('b');
+  r.write('tests/[literal].test.ts', 'it.skip("x", () => {});\n'); const head = r.commit('h');
+  assert.deepEqual(createGit(r.dir).changes(base, head)[0]!.added, [{ line: 1, text: 'it.skip("x", () => {});' }]);
+});
+
+test('diff inspection never runs configured text conversion commands', () => {
+  const r = makeRepo(); r.write('tests/a.test.ts', 'test("x", () => {});\n');
+  r.write('.gitattributes', 'tests/*.ts diff=hidden\n');
+  r.git('config', 'diff.hidden.textconv', 'echo harmless');
+  const base = r.commit('b');
+  r.write('tests/a.test.ts', 'it.skip("x", () => {});\n'); const head = r.commit('h');
+  assert.deepEqual(createGit(r.dir).changes(base, head)[0]!.added, [{ line: 1, text: 'it.skip("x", () => {});' }]);
+});
+
+test('show reports invalid refs instead of treating read failures as absent files', () => {
+  const r = makeRepo(); r.write('a', 'a\n'); r.commit('b');
+  assert.throws(() => createGit(r.dir).show('missing-ref', '.agentgate.json'), GateError);
+});
