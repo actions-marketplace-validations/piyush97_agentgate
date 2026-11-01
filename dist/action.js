@@ -1,0 +1,122 @@
+import { appendFileSync, readFileSync } from 'node:fs';
+import { collect } from './collect.js';
+import { downgrade, runGate, verdictOf } from './engine.js';
+import { toAnnotations, toMarkdown } from './report.js';
+import { GateError } from './types.js';
+export function overrideBy(events, label, prAuthor) {
+    let latest;
+    for (const event of events) {
+        if (!event || typeof event !== 'object')
+            return { accepted: false, reason: 'invalid label event data' };
+        if (event.label?.name !== label)
+            continue;
+        if (event.event !== 'labeled' && event.event !== 'unlabeled')
+            continue;
+        latest = event;
+    }
+    if (latest === undefined)
+        return { accepted: false, reason: 'label not found in events' };
+    if (latest.event === 'unlabeled')
+        return { accepted: false, reason: 'label was removed' };
+    if (!latest.actor || typeof latest.actor.login !== 'string' || !latest.actor.login) {
+        return { accepted: false, reason: 'invalid label actor data' };
+    }
+    if (latest.actor.type !== 'User')
+        return { accepted: false, reason: `applied by a bot (${latest.actor.login})` };
+    if (latest.actor.login.toLowerCase() === prAuthor.toLowerCase())
+        return { accepted: false, reason: `applied by the PR author (${latest.actor.login})` };
+    return { accepted: true, reason: `applied by @${latest.actor.login}` };
+}
+async function labelEvents(env, fetchFn, prNumber) {
+    const events = [];
+    let url = `${env['GITHUB_API_URL']}/repos/${env['GITHUB_REPOSITORY']}/issues/${prNumber}/events?per_page=100`;
+    try {
+        for (let page = 0; url !== null && page < 10; page++) {
+            const res = await fetchFn(url, {
+                headers: {
+                    Authorization: `Bearer ${env['INPUT_GITHUB-TOKEN']}`,
+                    Accept: 'application/vnd.github+json',
+                },
+                redirect: 'error',
+                signal: AbortSignal.timeout(10_000),
+            });
+            if (!res.ok)
+                return { error: `HTTP ${res.status}` };
+            const data = await res.json();
+            if (!Array.isArray(data))
+                return { error: 'invalid label event data' };
+            events.push(...data);
+            const next = /<([^>]+)>;\s*rel="next"/.exec(res.headers.get('link') ?? '');
+            if (next && !next[1].startsWith(`${env['GITHUB_API_URL']}/`)) {
+                return { error: 'unsafe pagination URL' };
+            }
+            url = next ? next[1] : null;
+        }
+    }
+    catch {
+        return { error: 'could not read label events' };
+    }
+    return url === null ? { events } : { error: 'label-event pagination limit reached' };
+}
+export async function run(env, fetchFn) {
+    try {
+        const eventPath = env['GITHUB_EVENT_PATH'];
+        const event = eventPath ? JSON.parse(readFileSync(eventPath, 'utf8')) : {};
+        const pr = event.pull_request;
+        if (pr === undefined) {
+            console.log('::error::agentgate runs on pull_request events');
+            return 2;
+        }
+        const { files, ctx } = collect(env['GITHUB_WORKSPACE'] ?? process.cwd(), pr.base.sha, pr.head.sha, env['INPUT_CONFIG-PATH']);
+        let findings = runGate(files, ctx);
+        let note;
+        const label = ctx.config.overrideLabel;
+        const labelled = (pr.labels ?? []).some((l) => l.name === label);
+        if (verdictOf(findings) === 'block' && labelled) {
+            if (event.action === 'synchronize') {
+                note = 'Override label ignored: new commits pushed after approval; remove and re-apply the label';
+            }
+            else if (event.action !== 'labeled' || event.label?.name !== label) {
+                note = 'Override label ignored: remove and re-apply the approval label for this run';
+            }
+            else {
+                const result = await labelEvents(env, fetchFn, pr.number);
+                if ('error' in result) {
+                    note = `Override check failed: ${result.error}`;
+                }
+                else {
+                    const override = overrideBy(result.events, label, pr.user.login);
+                    if (override.accepted) {
+                        findings = downgrade(findings);
+                        note = `Override by ${override.reason.replace(/^applied by /, '')} via label ${label}`;
+                    }
+                    else {
+                        note = `Override label ignored: ${override.reason}`;
+                    }
+                }
+            }
+        }
+        const verdict = verdictOf(findings);
+        const summaryPath = env['GITHUB_STEP_SUMMARY'];
+        if (summaryPath)
+            appendFileSync(summaryPath, `${toMarkdown(findings, verdict, note)}\n`);
+        for (const annotation of toAnnotations(findings))
+            console.log(annotation);
+        const outputPath = env['GITHUB_OUTPUT'];
+        if (outputPath)
+            appendFileSync(outputPath, `verdict=${verdict}\n`);
+        return verdict === 'block' ? 1 : 0;
+    }
+    catch (e) {
+        const message = e instanceof GateError ? e.message
+            : e instanceof SyntaxError ? 'Cannot parse GitHub event JSON from GITHUB_EVENT_PATH.'
+                : 'Cannot read GitHub event or write GITHUB_STEP_SUMMARY/GITHUB_OUTPUT.';
+        console.log(`::error::${message.replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A')}`);
+        return 2;
+    }
+}
+if (import.meta.main) {
+    run(process.env, fetch).then((code) => {
+        process.exitCode = code;
+    });
+}

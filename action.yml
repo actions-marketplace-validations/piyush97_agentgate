@@ -1,0 +1,20 @@
+name: agentgate
+description: Block AI-agent PRs that weaken tests, edit guardrails, or escalate CI permissions
+inputs:
+  config-path:
+    description: Path to the agentgate config, read from the PR base commit
+    required: false
+    default: .agentgate.json
+  github-token:
+    description: Token used to read PR label events
+    required: false
+    default: ${{ github.token }}
+outputs:
+  verdict:
+    description: pass, warn, or block
+runs:
+  using: node24
+  main: dist/action.js
+branding:
+  icon: shield
+  color: red
