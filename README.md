@@ -100,7 +100,7 @@ Anything else keeps the block and says why in the summary. The Action has `conte
 
 Make the `agentgate` job a required status check in branch protection. Add `.github/** @your-owner` to CODEOWNERS and enable **Require review from Code Owners**. A PR can otherwise replace or remove the workflow that runs the gate. For organizations with ruleset-required workflows, run the gate from that trusted workflow.
 
-The pre-release self-gate uses `./`, which runs the PR's own `dist/`. CODEOWNERS review is essential. After v0.1.0, pin the self-gate to the released full commit SHA. Pin consumers to a full SHA too: mutable version tags fail `workflow-escalation`.
+The self-gate is pinned to the v0.1.0 release SHA, so a PR cannot swap in its own `dist/`. Pin consumers to a full SHA too: mutable version tags fail `workflow-escalation`.
 
 ## Exit codes
 
