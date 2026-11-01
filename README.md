@@ -30,8 +30,6 @@ Details, trust boundaries and the override flow: [docs/architecture.md](docs/arc
 
 ## Quick start
 
-Release pending. Replace `<FULL_SHA>` below with the published v0.1.0 commit SHA before installing.
-
 ```yaml
 # .github/workflows/agentgate.yml
 on:
@@ -45,10 +43,10 @@ jobs:
     name: agentgate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: piyush97/agentgate@<FULL_SHA> # v0.1.0 (release pending)
+      - uses: piyush97/agentgate@13e7fc870ea5ebd2df2166efe9b2118e950a85f4 # v0.1.0
 ```
 
 `fetch-depth: 0` is required: the Action resolves the PR base commit to read config and file contents from it.
