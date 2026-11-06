@@ -3,11 +3,11 @@ import { collect } from './collect.js';
 import { downgrade, runGate, verdictOf } from './engine.js';
 import { toAnnotations, toMarkdown } from './report.js';
 import { GateError } from './types.js';
-export function overrideBy(events, label, prAuthor) {
+export function overrideBy(events, label, prAuthor, repoOwner) {
     let latest;
     for (const event of events) {
         if (!event || typeof event !== 'object')
-            return { accepted: false, reason: 'invalid label event data' };
+            return { accepted: false, reason: 'the label event history is unreadable' };
         if (event.label?.name !== label)
             continue;
         if (event.event !== 'labeled' && event.event !== 'unlabeled')
@@ -15,17 +15,24 @@ export function overrideBy(events, label, prAuthor) {
         latest = event;
     }
     if (latest === undefined)
-        return { accepted: false, reason: 'label not found in events' };
+        return { accepted: false, reason: 'the label was never applied to this PR' };
     if (latest.event === 'unlabeled')
-        return { accepted: false, reason: 'label was removed' };
+        return { accepted: false, reason: 'the label was removed' };
     if (!latest.actor || typeof latest.actor.login !== 'string' || !latest.actor.login) {
-        return { accepted: false, reason: 'invalid label actor data' };
+        return { accepted: false, reason: 'the label event has no actor, so history is incomplete' };
     }
     if (latest.actor.type !== 'User')
-        return { accepted: false, reason: `applied by a bot (${latest.actor.login})` };
-    if (latest.actor.login.toLowerCase() === prAuthor.toLowerCase())
-        return { accepted: false, reason: `applied by the PR author (${latest.actor.login})` };
-    return { accepted: true, reason: `applied by @${latest.actor.login}` };
+        return { accepted: false, reason: `applied by a bot (@${latest.actor.login}); a human must approve` };
+    const login = latest.actor.login;
+    const isAuthor = login.toLowerCase() === prAuthor.toLowerCase();
+    const isOwner = repoOwner !== undefined && login.toLowerCase() === repoOwner.toLowerCase();
+    if (isAuthor && !isOwner) {
+        return {
+            accepted: false,
+            reason: `applied by the PR author (@${login}); another maintainer or the repo owner must approve`,
+        };
+    }
+    return { accepted: true, reason: isOwner ? `approval by repo owner @${login}` : `approval by @${login}` };
 }
 async function labelEvents(env, fetchFn, prNumber) {
     const events = [];
@@ -74,24 +81,24 @@ export async function run(env, fetchFn) {
         const labelled = (pr.labels ?? []).some((l) => l.name === label);
         if (verdictOf(findings) === 'block' && labelled) {
             if (event.action === 'synchronize') {
-                note = 'Override label ignored: new commits pushed after approval; remove and re-apply the label';
+                note = 'Override ignored: commits were pushed after approval. Remove and re-apply the label to approve these commits.';
             }
             else if (event.action !== 'labeled' || event.label?.name !== label) {
-                note = 'Override label ignored: remove and re-apply the approval label for this run';
+                note = 'Override ignored: the approval label was not applied in this run. Apply it to approve, or fix the findings.';
             }
             else {
                 const result = await labelEvents(env, fetchFn, pr.number);
                 if ('error' in result) {
-                    note = `Override check failed: ${result.error}`;
+                    note = `Override ignored: could not read label events (${result.error}), so the label cannot be trusted.`;
                 }
                 else {
-                    const override = overrideBy(result.events, label, pr.user.login);
+                    const override = overrideBy(result.events, label, pr.user.login, event.repository?.owner?.login);
                     if (override.accepted) {
                         findings = downgrade(findings);
-                        note = `Override by ${override.reason.replace(/^applied by /, '')} via label ${label}`;
+                        note = `Override applied: ${override.reason}, so blocking findings are now warnings. Merge only after the review this records.`;
                     }
                     else {
-                        note = `Override label ignored: ${override.reason}`;
+                        note = `Override ignored: ${override.reason}. Fix the findings, or ask a different reviewer to apply the label.`;
                     }
                 }
             }
@@ -99,7 +106,7 @@ export async function run(env, fetchFn) {
         const verdict = verdictOf(findings);
         const summaryPath = env['GITHUB_STEP_SUMMARY'];
         if (summaryPath)
-            appendFileSync(summaryPath, `${toMarkdown(findings, verdict, note)}\n`);
+            appendFileSync(summaryPath, `${toMarkdown(findings, verdict, note, label)}\n`);
         for (const annotation of toAnnotations(findings))
             console.log(annotation);
         const outputPath = env['GITHUB_OUTPUT'];
@@ -110,7 +117,7 @@ export async function run(env, fetchFn) {
     catch (e) {
         const message = e instanceof GateError ? e.message
             : e instanceof SyntaxError ? 'Cannot parse GitHub event JSON from GITHUB_EVENT_PATH.'
-                : 'Cannot read GitHub event or write GITHUB_STEP_SUMMARY/GITHUB_OUTPUT.';
+                : `agentgate failed: ${e.message}`;
         console.log(`::error::${message.replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A')}`);
         return 2;
     }

@@ -81,7 +81,7 @@ test('binary attributes cannot hide a new dependency or install script', () => {
   const result = run(r.dir, ['check', '--base', base, '--format', 'json']);
   assert.equal(result.code, 1);
   const report = JSON.parse(result.out);
-  assert.deepEqual(report.findings.map((f: { message: string }) => f.message), ['New dependency: new-package@^1 (dependencies)', 'Install lifecycle script changed: postinstall']);
+  assert.deepEqual(report.findings.map((f: { message: string }) => f.message), ['New dependency: new-package@^1 (dependencies). Check the package is intended, then apply "agentgate-approved" after review.', 'Install lifecycle script changed: postinstall. It runs arbitrary code at install time, so review it before approving.']);
 });
 
 test('CLI from a subdirectory still reads root config and complete diff lines', () => {

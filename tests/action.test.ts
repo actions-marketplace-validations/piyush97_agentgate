@@ -11,12 +11,20 @@ const L = 'agentgate-approved';
 const ev = (login: string, type: string, event = 'labeled'): LabelEvent => ({ event, label: { name: L }, actor: { login, type } });
 
 test('override accepted from a human reviewer', () => {
-  assert.deepEqual(overrideBy([ev('piyush97', 'User')], L, 'copilot-swe-agent[bot]'), { accepted: true, reason: 'applied by @piyush97' });
+  assert.deepEqual(overrideBy([ev('piyush97', 'User')], L, 'copilot-swe-agent[bot]'), { accepted: true, reason: 'approval by @piyush97' });
 });
 test('override rejected for bot, PR author, or later unlabel', () => {
   assert.equal(overrideBy([ev('github-actions[bot]', 'Bot')], L, 'dev').accepted, false);
   assert.equal(overrideBy([ev('dev', 'User')], L, 'dev').accepted, false);
-  assert.equal(overrideBy([ev('lead', 'User'), ev('lead', 'User', 'unlabeled')], L, 'dev').reason, 'label was removed');
+  assert.equal(overrideBy([ev('lead', 'User'), ev('lead', 'User', 'unlabeled')], L, 'dev').reason, 'the label was removed');
+});
+
+test('override accepted from the repo owner on their own PR', () => {
+  assert.deepEqual(overrideBy([ev('owner', 'User')], L, 'owner', 'owner'), {
+    accepted: true,
+    reason: 'approval by repo owner @owner',
+  });
+  assert.equal(overrideBy([ev('dev', 'User')], L, 'dev', 'owner').accepted, false);
 });
 
 function env(dir: string, event: unknown): { env: NodeJS.ProcessEnv; summary: string; output: string } {
@@ -70,7 +78,7 @@ test('run(): self-applied label keeps block and says why', async () => {
   const fetchFn = (async () => new Response(JSON.stringify([ev('dev', 'User')]), { status: 200 })) as unknown as typeof fetch;
   const code = await run(e, fetchFn);
   assert.equal(code, 1);
-  assert.match(readFileSync(summary, 'utf8'), /Override label ignored: applied by the PR author/);
+  assert.match(readFileSync(summary, 'utf8'), /Override ignored: applied by the PR author/);
   assert.match(readFileSync(output, 'utf8'), /verdict=block/);
 });
 
@@ -81,7 +89,7 @@ test('run(): human override downgrades to warn', async () => {
   const fetchFn = (async () => new Response(JSON.stringify([ev('piyush97', 'User')]), { status: 200 })) as unknown as typeof fetch;
   const code = await run(e, fetchFn);
   assert.equal(code, 0);
-  assert.match(readFileSync(summary, 'utf8'), /Override by @piyush97 via label agentgate-approved/);
+  assert.match(readFileSync(summary, 'utf8'), /Override applied: approval by @piyush97/);
   assert.match(readFileSync(output, 'utf8'), /verdict=warn/);
 });
 
@@ -94,7 +102,7 @@ for (const action of ['synchronize', 'opened', 'reopened', 'unlabeled', 'labeled
     let calls = 0;
     const fetchFn = (async () => { calls++; return Response.json([ev('lead', 'User')]); }) as typeof fetch;
     assert.equal(await run(e, fetchFn), 1);
-    assert.match(readFileSync(summary, 'utf8'), /Override label ignored:/);
+    assert.match(readFileSync(summary, 'utf8'), /Override ignored:/);
     assert.match(readFileSync(output, 'utf8'), /verdict=block/);
     assert.equal(calls, 0);
   });
@@ -116,7 +124,7 @@ for (const failure of ['HTTP', 'network', 'invalid JSON', 'invalid events', 'off
       return Response.json([ev('lead', 'User')], { headers: { link: `<${next}>; rel="next"` } });
     }) as typeof fetch;
     assert.equal(await run(e, fetchFn), 1);
-    assert.match(readFileSync(summary, 'utf8'), /Override check failed:/);
+    assert.match(readFileSync(summary, 'utf8'), /Override ignored: could not read label events/);
     assert.match(readFileSync(output, 'utf8'), /verdict=block/);
     assert.equal(calls, failure === 'pagination limit' ? 10 : 1);
   });

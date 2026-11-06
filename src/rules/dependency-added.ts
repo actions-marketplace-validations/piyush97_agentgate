@@ -23,7 +23,7 @@ function packageJson(f: FileDiff, ctx: RuleContext): RawFinding[] {
   const headText = ctx.readFile('head', f.path);
   if (headText === null) return [];
   const head = parseJson(headText);
-  if (head === null) return [{ rule: 'dependency-added', file: f.path, message: 'package.json is not valid JSON' }];
+  if (head === null) return [{ rule: 'dependency-added', file: f.path, message: 'package.json is not valid JSON: fix the syntax so the gate can read the dependency list.' }];
 
   const base = parseJson(ctx.readFile('base', f.oldPath ?? f.path)) ?? {};
   const findings: RawFinding[] = [];
@@ -32,7 +32,7 @@ function packageJson(f: FileDiff, ctx: RuleContext): RawFinding[] {
     const before = asObject(base[field]);
     for (const [name, range] of Object.entries(asObject(head[field]))) {
       if (!Object.hasOwn(before, name)) {
-        findings.push({ rule: 'dependency-added', file: f.path, message: `New dependency: ${name}@${String(range)} (${field})` });
+        findings.push({ rule: 'dependency-added', file: f.path, message: `New dependency: ${name}@${String(range)} (${field}). Check the package is intended, then apply "${ctx.config.overrideLabel}" after review.` });
       }
     }
   }
@@ -40,7 +40,7 @@ function packageJson(f: FileDiff, ctx: RuleContext): RawFinding[] {
   const beforeScripts = asObject(base['scripts']);
   for (const [name, command] of Object.entries(asObject(head['scripts']))) {
     if (LIFECYCLE.includes(name) && typeof command === 'string' && beforeScripts[name] !== command) {
-      findings.push({ rule: 'dependency-added', file: f.path, message: `Install lifecycle script changed: ${name}` });
+      findings.push({ rule: 'dependency-added', file: f.path, message: `Install lifecycle script changed: ${name}. It runs arbitrary code at install time, so review it before approving.` });
     }
   }
 
@@ -49,7 +49,7 @@ function packageJson(f: FileDiff, ctx: RuleContext): RawFinding[] {
 
 const nameOf = (text: string): string => text.split(/[=<>~![; ]/, 1)[0]!.toLowerCase();
 
-function requirements(f: FileDiff): RawFinding[] {
+function requirements(f: FileDiff, ctx: RuleContext): RawFinding[] {
   const before = new Set(f.removed.map((l) => nameOf(l.text.split('#')[0]!.trim())).filter((n) => n !== ''));
   const findings: RawFinding[] = [];
 
@@ -57,7 +57,7 @@ function requirements(f: FileDiff): RawFinding[] {
     const text = line.text.split('#')[0]!.trim();
     if (text === '' || text.startsWith('-')) continue;
     if (before.has(nameOf(text))) continue;
-    findings.push({ rule: 'dependency-added', file: f.path, line: line.line, message: `New dependency: ${text}` });
+    findings.push({ rule: 'dependency-added', file: f.path, line: line.line, message: `New dependency: ${text}. Check the package is intended, then apply "${ctx.config.overrideLabel}" after review.` });
   }
 
   return findings;
@@ -72,8 +72,8 @@ export const dependencyAdded: Rule = {
       if (f.status === 'deleted') continue;
       if (matchesGlob(f.path, '**/package.json')) findings.push(...packageJson(f, ctx));
       if (matchesGlob(f.path, '**/requirements*.txt')) {
-        if (f.binary) findings.push({ rule: 'dependency-added', file: f.path, message: 'Dependency file changed as binary: needs human review' });
-        else findings.push(...requirements(f));
+        if (f.binary) findings.push({ rule: 'dependency-added', file: f.path, message: 'Dependency file changed as binary: commit plain text so the change can be reviewed.' });
+        else findings.push(...requirements(f, ctx));
       }
     }
     return findings;

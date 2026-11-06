@@ -87,11 +87,8 @@ flowchart TB
   L -->|block to warn| Gate
 ```
 
-- Head content is only diffed and pattern-matched. Nothing from the PR is executed or imported.
-- Config comes from the base commit, so a PR cannot disable rules in the same change.
-- The override is only honored on the `labeled` run itself; any later `synchronize` keeps the block.
-- API failures, bad pagination, or incomplete history fail closed (block stays).
-- The Action needs only `contents: read` and `pull-requests: read`.
+- The override needs a `labeled` event that is still the newest for that label, applied by a human account other than the PR author. The repository owner may approve their own PR. Any later `synchronize` event blocks again.
+- A failed label lookup blocks (fail closed) and the summary says so.
 
 ## Exit codes
 
