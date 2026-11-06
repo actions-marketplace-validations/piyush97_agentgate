@@ -1,4 +1,4 @@
-name: agentgate
+name: Agentgate by piyush97
 description: Block AI-agent PRs that weaken tests, edit guardrails, or escalate CI permissions
 inputs:
   config-path:
