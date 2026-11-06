@@ -19,27 +19,27 @@ function packageJson(f, ctx) {
         return [];
     const head = parseJson(headText);
     if (head === null)
-        return [{ rule: 'dependency-added', file: f.path, message: 'package.json is not valid JSON' }];
+        return [{ rule: 'dependency-added', file: f.path, message: 'package.json is not valid JSON: fix the syntax so the gate can read the dependency list.' }];
     const base = parseJson(ctx.readFile('base', f.oldPath ?? f.path)) ?? {};
     const findings = [];
     for (const field of DEP_FIELDS) {
         const before = asObject(base[field]);
         for (const [name, range] of Object.entries(asObject(head[field]))) {
             if (!Object.hasOwn(before, name)) {
-                findings.push({ rule: 'dependency-added', file: f.path, message: `New dependency: ${name}@${String(range)} (${field})` });
+                findings.push({ rule: 'dependency-added', file: f.path, message: `New dependency: ${name}@${String(range)} (${field}). Check the package is intended, then apply "${ctx.config.overrideLabel}" after review.` });
             }
         }
     }
     const beforeScripts = asObject(base['scripts']);
     for (const [name, command] of Object.entries(asObject(head['scripts']))) {
         if (LIFECYCLE.includes(name) && typeof command === 'string' && beforeScripts[name] !== command) {
-            findings.push({ rule: 'dependency-added', file: f.path, message: `Install lifecycle script changed: ${name}` });
+            findings.push({ rule: 'dependency-added', file: f.path, message: `Install lifecycle script changed: ${name}. It runs arbitrary code at install time, so review it before approving.` });
         }
     }
     return findings;
 }
 const nameOf = (text) => text.split(/[=<>~![; ]/, 1)[0].toLowerCase();
-function requirements(f) {
+function requirements(f, ctx) {
     const before = new Set(f.removed.map((l) => nameOf(l.text.split('#')[0].trim())).filter((n) => n !== ''));
     const findings = [];
     for (const line of f.added) {
@@ -48,7 +48,7 @@ function requirements(f) {
             continue;
         if (before.has(nameOf(text)))
             continue;
-        findings.push({ rule: 'dependency-added', file: f.path, line: line.line, message: `New dependency: ${text}` });
+        findings.push({ rule: 'dependency-added', file: f.path, line: line.line, message: `New dependency: ${text}. Check the package is intended, then apply "${ctx.config.overrideLabel}" after review.` });
     }
     return findings;
 }
@@ -63,9 +63,9 @@ export const dependencyAdded = {
                 findings.push(...packageJson(f, ctx));
             if (matchesGlob(f.path, '**/requirements*.txt')) {
                 if (f.binary)
-                    findings.push({ rule: 'dependency-added', file: f.path, message: 'Dependency file changed as binary: needs human review' });
+                    findings.push({ rule: 'dependency-added', file: f.path, message: 'Dependency file changed as binary: commit plain text so the change can be reviewed.' });
                 else
-                    findings.push(...requirements(f));
+                    findings.push(...requirements(f, ctx));
             }
         }
         return findings;

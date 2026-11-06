@@ -17,9 +17,9 @@ export const testWeakened: Rule = {
 
     for (const f of files) {
       if (f.status === 'deleted' && isTest(f.path)) {
-        findings.push({ rule: 'test-weakened', file: f.path, message: 'Test file deleted' });
+        findings.push({ rule: 'test-weakened', file: f.path, message: `Test file deleted: restore it, or have a reviewer apply "${ctx.config.overrideLabel}".` });
       } else if (f.binary && isTest(f.path)) {
-        findings.push({ rule: 'test-weakened', file: f.path, message: 'Binary test file changed: needs human review' });
+        findings.push({ rule: 'test-weakened', file: f.path, message: `Binary test file changed: commit the source file, or have a reviewer apply "${ctx.config.overrideLabel}".` });
       }
     }
 
@@ -28,7 +28,7 @@ export const testWeakened: Rule = {
         findings.push({
           rule: 'test-weakened',
           file: f.path,
-          message: `Test file moved out of test paths: ${f.oldPath} → ${f.path}`,
+          message: `Test moved out of the test paths (${f.oldPath} -> ${f.path}): move it back, or have a reviewer apply "${ctx.config.overrideLabel}".`,
         });
       }
     }
@@ -41,7 +41,7 @@ export const testWeakened: Rule = {
             rule: 'test-weakened',
             file: f.path,
             line: line.line,
-            message: `Test disabled or focused: ${line.text.trim()}`,
+            message: `Test disabled or focused (${line.text.trim().slice(0, 120)}): remove the marker, or have a reviewer apply "${ctx.config.overrideLabel}".`,
           });
         }
       }
@@ -61,7 +61,7 @@ export const testWeakened: Rule = {
       findings.push({
         rule: 'test-weakened',
         file: worst.file,
-        message: `Net ${-net} assertion(s) removed across test files`,
+        message: `Net ${-net} assertion(s) removed across test files: add the assertions back, or have a reviewer apply "${ctx.config.overrideLabel}".`,
       });
     }
 

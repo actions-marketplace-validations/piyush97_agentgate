@@ -83,18 +83,15 @@ node dist/cli.js check --base HEAD~3
 
 ## Override
 
-A reviewer who has read the change can apply the `agentgate-approved` label. The block becomes a warning, and the step summary names who approved it.
+A reviewer applies the `agentgate-approved` label. The gate accepts it only when:
 
-The label only counts when:
+- the newest event for that label is `labeled`;
+- the actor is a user account, not a bot;
+- the actor is not the PR author, unless the actor is the repository owner. The owner can approve their own PR.
 
-- this run was triggered by applying the approval label (`labeled`),
-- the latest `labeled` or `unlabeled` event for it is a `labeled` event,
-- the actor is a user account, not a bot,
-- the actor is not the PR author.
+The label only covers the commits present when it was applied. Re-apply it after every push.
 
-Remove and re-apply the label after new commits, reopening the PR, or another label event. Existing labels never approve these runs. API errors or incomplete event history also keep the block.
-
-Anything else keeps the block and says why in the summary. The Action has `contents: read` and `pull-requests: read`; it never writes to the PR.
+Without the label, a blocked PR shows what failed and how to fix it in the step summary: each finding names the file and line, the problem, and the fix or the label that overrides it.
 
 ## Required setup
 

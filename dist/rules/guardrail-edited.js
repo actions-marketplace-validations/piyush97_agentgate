@@ -9,7 +9,7 @@ export const guardrailEdited = {
                 findings.push({
                     rule: 'guardrail-edited',
                     file: f.path,
-                    message: `Protected path changed (${f.status}): needs human review`,
+                    message: `Protected path changed (${f.status}): this file guards the gate, so a code owner must review it before merge.`,
                 });
             }
         }

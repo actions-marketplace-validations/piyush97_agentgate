@@ -5,7 +5,7 @@ const SUPPRESSION = /\bnosemgrep\b|eslint-disable|@ts-(?:ignore|nocheck|expect-e
 export const suppressionAdded: Rule = {
   id: 'suppression-added',
 
-  check(files: FileDiff[], _ctx: RuleContext): RawFinding[] {
+  check(files: FileDiff[], ctx: RuleContext): RawFinding[] {
     const findings: RawFinding[] = [];
     for (const f of files) {
       if (f.binary) continue;
@@ -15,7 +15,7 @@ export const suppressionAdded: Rule = {
           rule: 'suppression-added',
           file: f.path,
           line: line.line,
-          message: `Scanner or type check silenced: ${line.text.trim().slice(0, 120)}`,
+          message: `Scanner or type check silenced (${line.text.trim().slice(0, 120)}): remove it or say why, then apply "${ctx.config.overrideLabel}".`,
         });
       }
     }
