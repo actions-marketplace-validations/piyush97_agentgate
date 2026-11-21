@@ -48,7 +48,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: piyush97/agentgate@13e7fc870ea5ebd2df2166efe9b2118e950a85f4 # v0.1.0
+      - uses: piyush97/agentgate@4f91e1f01fbea8372a483690b3bb15b9fa5c5c39 # v0.1.3
 ```
 
 `fetch-depth: 0` is required: the Action resolves the PR base commit to read config and file contents from it.

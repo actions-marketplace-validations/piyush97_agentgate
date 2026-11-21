@@ -59,9 +59,11 @@ Re-run of dotnet/runtime #137001 with the fix:
 
 The other five verdicts did not change.
 
-## Known gap, not fixed
+## Known gap, fixed after the trial
 
-The assertion counter is case-sensitive, so C# assertions (`Assert.Equal(...)`, `Assert.True(...)`) are not counted. A PR that deletes xUnit/NUnit/MSTest assertions will not trip the net-assertion-loss check. None of the six PRs removed such lines, so this trial did not produce a false negative from it.
+The assertion counter was case-sensitive, so C# assertions (`Assert.Equal(...)`, `Assert.True(...)`) were not counted. A PR that deleted xUnit/NUnit/MSTest assertions would not trip the net-assertion-loss check. None of the six PRs removed such lines, so this trial did not produce a false negative from it.
+
+The counter now also counts `Assert.*`, `CollectionAssert.*` and `StringAssert.*` calls (C#), Rust `assert!`/`assert_eq!`/`debug_assert!` style macros, and GoogleTest `EXPECT_*`/`ASSERT_*` macros. Regression test: `C#, Rust and GoogleTest assertions count toward net assertion loss` in `tests/rules/test-weakened.test.ts`.
 
 ## Dogfood: agentgate on its own Dependabot PR
 
