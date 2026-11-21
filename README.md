@@ -18,6 +18,8 @@ flowchart LR
 
 Details, trust boundaries and the override flow: [docs/architecture.md](docs/architecture.md).
 
+Results on six merged Copilot and Devin PRs from litellm, dotnet/runtime, vscode and others: [docs/field-trial.md](docs/field-trial.md).
+
 ## Rules
 
 | Rule | Blocks when | Default |
