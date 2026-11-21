@@ -18,6 +18,11 @@ test('.skip/.only/xit/pytest skip flagged with line numbers', () => {
     fd('tests/test_y.py', { added: [[3, '@pytest.mark.skip(reason="flaky")']] })], ctx);
   assert.deepEqual(out.map((f) => f.line), [7, 9, 11, 3]);
 });
+test('xUnit ActiveIssue and Skip= flagged (dotnet/runtime#137001 field trial)', () => {
+  const out = testWeakened.check([
+    fd('src/tests/StackTraces.cs', { added: [[18, '        // ActiveIssue https://github.com/dotnet/runtime/issues/136676'], [20, '[Fact(DisplayName = "a", Skip = "flaky")]'], [22, '[Fact]']] })], ctx);
+  assert.deepEqual(out.map((f) => f.line), [18, 20]);
+});
 test('net assertion loss flagged once; moved assertions are not', () => {
   const lost = testWeakened.check([fd('a.test.ts', { removed: ['expect(a).toBe(1)', 'expect(b).toBe(2)'], added: ['expect(a).toBeTruthy()'] })], ctx);
   assert.deepEqual(lost.map((f) => f.message), ['Net 1 assertion(s) removed across test files: add the assertions back, or have a reviewer apply "agentgate-approved".']);
