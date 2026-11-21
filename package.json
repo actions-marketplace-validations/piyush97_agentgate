@@ -1,6 +1,6 @@
 {
   "name": "@piyush97/agentgate",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Block AI-agent PRs that weaken tests, edit guardrails, or escalate CI permissions",
   "type": "module",
   "license": "MIT",

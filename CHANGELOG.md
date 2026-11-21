@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.3 (2026-11-21)
+
+- `test-weakened` now counts C# (`Assert.*`, `CollectionAssert.*`, `StringAssert.*`), Rust (`assert!`, `assert_eq!`, `debug_assert!`) and GoogleTest (`EXPECT_*`, `ASSERT_*`) assertions in the net-assertion-loss check. Before, deleting them did not trip the check.
+- `test-weakened` now flags more skip and focus markers: Jest/Vitest `.skip.each`, `.only.each` and `test.concurrent.skip`, Jasmine/Jest `fit`/`fdescribe`, RSpec/Minitest `xit`/`xdescribe`/`fcontext`/`skip "reason"`, `pytest.skip()`, `pytest.xfail()`, `self.skipTest()`, NUnit/MSTest `[Ignore]`, and Rust `#[ignore]`.
+
 ## 0.1.2 (2026-11-21)
 
 - `test-weakened` now flags xUnit skip markers: `[ActiveIssue(...)]` and `Skip =` on `[Fact]`/`[Theory]`. Found in a field trial where a .NET test disabled this way passed the gate.
