@@ -38,3 +38,22 @@ test('binary changes to test paths require review even without parsed lines', ()
   assert.equal(findings.length, 1);
   assert.match(findings[0]!.message, /Binary test file changed:/);
 });
+test('C#, Rust and GoogleTest assertions count toward net assertion loss', () => {
+  const removed = [
+    'Assert.Equal(1, x);',
+    'Assert.True(ok);',
+    'Assert.Throws<ArgumentException>(() => f());',
+    'Assert.That(x, Is.EqualTo(1));',
+    'CollectionAssert.AreEqual(a, b);',
+    'assert_eq!(a, b);',
+    'debug_assert!(ok);',
+    'EXPECT_EQ(a, b);',
+    'ASSERT_TRUE(ok);',
+  ];
+  const out = testWeakened.check([fd('tests/Foo.Tests/FooTests.cs', { removed })], ctx);
+  assert.deepEqual(out.map((f) => f.message), ['Net 9 assertion(s) removed across test files: add the assertions back, or have a reviewer apply "agentgate-approved".']);
+});
+test('non-assertion lines that look similar are not counted', () => {
+  const removed = ['var assertion = new Assertion();', 'Assertions = 1;', 'ASSERT_OK = 1;', '// Assert the result', 'EXPECTED_VALUE(1)'];
+  assert.deepEqual(testWeakened.check([fd('tests/a.test.ts', { removed })], ctx), []);
+});
