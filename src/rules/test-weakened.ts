@@ -1,7 +1,7 @@
 import { matchesGlob } from 'node:path';
 import type { FileDiff, RawFinding, Rule, RuleContext } from '../types.ts';
 
-const SKIP = /\b(?:it|test|describe)\.(?:skip|only|todo)\s*\(|\b(?:xit|xtest|xdescribe)\s*\(|@pytest\.mark\.(?:skip|xfail)|@unittest\.skip|\bt\.Skip(?:Now|f)?\s*\(|@Disabled\b|@Ignore\b|\bActiveIssue\b|\[(?:Fact|Theory)\b[^\]]*\bSkip\s*=/;
+const SKIP = /\b(?:it|test|describe)(?:\.concurrent)?\.(?:skip|only|todo)\s*[(.]|^\s*(?:[fx](?:it|describe|context|specify)|skip)(?:\s*\(\s*|\s+)['"`]|^\s*[fx](?:describe|context)\s+[A-Z]|\bpytest\.(?:skip|xfail)\s*\(|\bself\.skipTest\s*\(|\[(?:[^\]]*[\s,])?Ignore\b|#\[ignore\b|\b(?:xit|xtest|xdescribe)\s*\(|@pytest\.mark\.(?:skip|xfail)|@unittest\.skip|\bt\.Skip(?:Now|f)?\s*\(|@Disabled\b|@Ignore\b|\bActiveIssue\b|\[(?:Fact|Theory)\b[^\]]*\bSkip\s*=/;
 const ASSERT = /\b(?:expect|assert\w*)\s*[.(]|\bself\.assert\w+\s*\(|\bt\.(?:Error|Errorf|Fatal|Fatalf|Fail|FailNow)\s*\(|\brequire\.\w+\s*\(|\b(?:Assert|CollectionAssert|StringAssert)\.\w+\s*[(<]|\b(?:debug_)?assert\w*!\s*\(|\b(?:EXPECT|ASSERT)_[A-Z_]+\s*\(/;
 
 export function isTestPath(path: string, globs: string[]): boolean {
